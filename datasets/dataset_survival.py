@@ -131,6 +131,8 @@ class Generic_WSI_Survival_Dataset(Dataset):
         self.min_mutation_nb = 20
         self.mutation_sampling_nb = 100
         self.eval = False
+        
+        self.gene_samples = 1
         # map all genes to predetermined order
         # start at 1 (because 0 is for CLS)
         
@@ -234,7 +236,7 @@ class Generic_WSI_Survival_Dataset(Dataset):
         if len(split) > 0:
             mask = self.slide_data['slide_id'].isin(split.tolist())
             df_slice = self.slide_data[mask].reset_index(drop=True)
-            split = Generic_Split(df_slice, metadata=self.metadata, mode=self.mode, signatures=self.signatures, data_dir=self.data_dir, label_col=self.label_col, patient_dict=self.patient_dict, num_classes=self.num_classes, df=self.df, min_nb=self.min_mutation_nb, samp_nb=self.mutation_sampling_nb)
+            split = Generic_Split(df_slice, metadata=self.metadata, mode=self.mode, signatures=self.signatures, data_dir=self.data_dir, label_col=self.label_col, patient_dict=self.patient_dict, num_classes=self.num_classes, df=self.df, min_nb=self.min_mutation_nb, samp_nb=self.mutation_sampling_nb, gene_samples=self.gene_samples, split_key=split_key)
         else:
             split = None
         
@@ -275,11 +277,12 @@ class Generic_WSI_Survival_Dataset(Dataset):
 
 
 class Generic_MIL_Survival_Dataset(Generic_WSI_Survival_Dataset):
-    def __init__(self, data_dir, mode: str='omic', **kwargs):
+    def __init__(self, data_dir, gene_samples=1, mode: str='omic', **kwargs):
         super(Generic_MIL_Survival_Dataset, self).__init__(**kwargs)
         self.data_dir = data_dir
         self.mode = mode
         self.use_h5 = False
+        self.gene_samples = gene_samples
 
     def load_from_h5(self, toggle):
         self.use_h5 = toggle
@@ -299,27 +302,31 @@ class Generic_MIL_Survival_Dataset(Generic_WSI_Survival_Dataset):
         
         if not self.use_h5:
             if True:  # temp for gene stuff
-                df_item = self.df[self.df['patient_ids'] == case_id]
-                if self.mutation_sampling_nb < df_item.shape[0]:
-                    # check nb of mutation (i.e. not nan = 1) for this patient
-                    n_mut = int(np.sum(df_item['mutation_ids'] > 1))
-                    if n_mut < self.min_mutation_nb:
-                        # select all mutations not nan
-                        mut_rows = df_item[df_item['mutation_ids'] > 1]
-                    else:
-                        # random nb of mut btw min_mutation_nb and min(mutation_sampling_nb and n_mut)
-                        n_mut = random.randint(self.min_mutation_nb, min(self.mutation_sampling_nb, n_mut))
-                        mut_rows = df_item[df_item['mutation_ids'] > 1].sample(n=n_mut)
-                    # rest of non nan mut
-                    n_mut_nan = self.mutation_sampling_nb - n_mut
-                    non_mut_rows = df_item[df_item['mutation_ids'] == 1].sample(n=n_mut_nan)
-                    if n_mut > 0:
-                        df_item = pd.concat([mut_rows, non_mut_rows])
-                    else:
-                        df_item = non_mut_rows
-                # return tuple of longtensors (gene_inds, mutation_inds) with CLS at the beginning
-                tokens = torch.LongTensor(df_item[['gene_ids', 'mutation_ids']].values)
-                return torch.cat((torch.LongTensor([0, 0]).unsqueeze(dim=0), tokens), dim=0), torch.zeros((1,1)), label, event_time, c
+                df_item_og = self.df[self.df['patient_ids'] == case_id]
+                all_samples = []
+                for i in range(self.gene_samples):
+                    df_item = df_item_og.copy()
+                    if self.mutation_sampling_nb < df_item.shape[0]:
+                        # check nb of mutation (i.e. not nan = 1) for this patient
+                        n_mut = int(np.sum(df_item['mutation_ids'] > 1))
+                        if n_mut < self.min_mutation_nb:
+                            # select all mutations not nan
+                            mut_rows = df_item[df_item['mutation_ids'] > 1]
+                        else:
+                            # random nb of mut btw min_mutation_nb and min(mutation_sampling_nb and n_mut)
+                            n_mut = random.randint(self.min_mutation_nb, min(self.mutation_sampling_nb, n_mut))
+                            mut_rows = df_item[df_item['mutation_ids'] > 1].sample(n=n_mut)
+                        # rest of non nan mut
+                        n_mut_nan = self.mutation_sampling_nb - n_mut
+                        non_mut_rows = df_item[df_item['mutation_ids'] == 1].sample(n=n_mut_nan)
+                        if n_mut > 0:
+                            df_item = pd.concat([mut_rows, non_mut_rows])
+                        else:
+                            df_item = non_mut_rows
+                    # return tuple of longtensors (gene_inds, mutation_inds) with CLS at the beginning
+                    tokens = torch.LongTensor(df_item[['gene_ids', 'mutation_ids']].values)
+                    all_samples.append(torch.cat((torch.LongTensor([0, 0]).unsqueeze(dim=0), tokens), dim=0))
+                return torch.stack(all_samples), torch.zeros((1,1)), label, event_time, c
             if self.mode == 'pyramid':
                 path_features = []
                 for slide_id in slide_ids:
@@ -336,7 +343,7 @@ class Generic_MIL_Survival_Dataset(Generic_WSI_Survival_Dataset):
 
 
 class Generic_Split(Generic_MIL_Survival_Dataset):
-    def __init__(self, slide_data, metadata, mode, df, min_nb, samp_nb, signatures=None, data_dir=None, label_col=None, patient_dict=None, num_classes=2):
+    def __init__(self, slide_data, metadata, mode, df, min_nb, samp_nb, gene_samples, split_key, signatures=None, data_dir=None, label_col=None, patient_dict=None, num_classes=2):
         self.use_h5 = False
         self.slide_data = slide_data
         self.metadata = metadata
@@ -348,6 +355,10 @@ class Generic_Split(Generic_MIL_Survival_Dataset):
         self.df = df
         self.min_mutation_nb = min_nb
         self.mutation_sampling_nb = samp_nb
+        if split_key == 'train':
+            self.gene_samples = 1
+        else:
+            self.gene_samples = gene_samples
         self.slide_cls_ids = [[] for i in range(self.num_classes)]
         for i in range(self.num_classes):
             self.slide_cls_ids[i] = np.where(self.slide_data['label'] == i)[0]

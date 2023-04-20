@@ -389,7 +389,12 @@ def get_custom_exp_code(args):
             model_code = '[%s]_[%s]' % (args.pretrain_4k, args.pretrain_WSI)
             param_code += 'HIPT_LGP'+ model_code
     elif args.model_type == 'gene':
-        param_code += 'GENE'
+        param_code += 'GENE' + str(args.gene_samples)
+        if args.freeze_BERT:
+            param_code += '_freeze'
+        if args.pretrain_BERT:
+            param_code += '_pretrain'
+        
     else:
         raise NotImplementedError
 

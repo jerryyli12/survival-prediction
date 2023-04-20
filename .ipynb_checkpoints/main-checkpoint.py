@@ -128,6 +128,10 @@ parser.add_argument('--pretrain_WSI',   type=str, default='None', help='Whether 
 parser.add_argument('--freeze_4k',      action='store_true', default=True, help='Whether to freeze the 4K Transformer in HIPT')
 parser.add_argument('--freeze_WSI',     action='store_true', default=False, help='Whether to freeze the WSI Transformer in HIPT')
 
+parser.add_argument('--gene_samples', type=int, default=1, help='Number of samples to take per patient')
+parser.add_argument('--freeze_BERT',    action='store_true', default=False, help='Whether to freeze the BERT Mutation model')
+parser.add_argument('--pretrain_BERT',  action='store_true', default=False, help='Whether to use pretrained BERT Mutation model')
+
 args = parser.parse_args()
 device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -197,6 +201,7 @@ if args.task == 'tcga_brca_survival':
 										   patient_strat= False,
 										   n_bins=4,
 										   label_col = 'survival_months',
+                                           gene_samples = args.gene_samples,
 										   ignore=[])
 	
 # if 'survival' in args.task:

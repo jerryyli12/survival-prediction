@@ -159,7 +159,7 @@ def train(datasets: tuple, cur: int, args: Namespace):
     elif args.model_type == 'hipt_lgp':
         model = HIPT_LGP_FC(**model_dict, freeze_4k=args.freeze_4k, pretrain_4k=args.pretrain_4k, freeze_WSI=args.freeze_WSI, pretrain_WSI=args.pretrain_WSI)
     elif args.model_type == 'gene':
-        model = GENE_FC(**model_dict)
+        model = GENE_FC(**model_dict, pretrain_BERT=args.pretrain_BERT, freeze_BERT=args.freeze_BERT)
     else:
         raise NotImplementedError
     
@@ -194,14 +194,14 @@ def train(datasets: tuple, cur: int, args: Namespace):
         if args.task_type == 'survival':
             if args.mode == 'coattn':
                 train_loop_survival_coattn(epoch, model, train_loader, optimizer, args.n_classes, writer, loss_fn, reg_fn, args.lambda_reg, args.gc)
-                stop = validate_survival_coattn(cur, epoch, model, val_loader, args.n_classes, early_stopping, monitor_cindex, writer, loss_fn, reg_fn, args.lambda_reg, args.results_dir)
+                stop = validate_survival_coattn(cur, epoch, model, val_loader, args.n_classes, early_stopping, monitor_cindex, writer, loss_fn, reg_fn, args.lambda_reg, args.results_dir, args.gene_samples)
             else:
                 train_loop_survival(epoch, model, train_loader, optimizer, args.n_classes, writer, loss_fn, reg_fn, args.lambda_reg, args.gc)
-                stop = validate_survival(cur, epoch, model, val_loader, args.n_classes, early_stopping, monitor_cindex, writer, loss_fn, reg_fn, args.lambda_reg, args.results_dir)
+                stop = validate_survival(cur, epoch, model, val_loader, args.n_classes, early_stopping, monitor_cindex, writer, loss_fn, reg_fn, args.lambda_reg, args.results_dir, args.gene_samples)
 
     torch.save(model.state_dict(), os.path.join(args.results_dir, "s_{}_checkpoint.pt".format(cur)))
     model.load_state_dict(torch.load(os.path.join(args.results_dir, "s_{}_checkpoint.pt".format(cur))))
-    results_val_dict, val_cindex = summary_survival(model, val_loader, args.n_classes)
+    results_val_dict, val_cindex = summary_survival(model, val_loader, args.n_classes, args.gene_samples)
     print('Val c-Index: {:.4f}'.format(val_cindex))
     writer.close()
     return results_val_dict, val_cindex
@@ -265,7 +265,7 @@ def train_loop_survival(epoch, model, loader, optimizer, n_classes, writer=None,
         writer.add_scalar('train/c_index', c_index, epoch)
 
 
-def validate_survival(cur, epoch, model, loader, n_classes, early_stopping=None, monitor_cindex=None, writer=None, loss_fn=None, reg_fn=None, lambda_reg=0., results_dir=None):
+def validate_survival(cur, epoch, model, loader, n_classes, early_stopping=None, monitor_cindex=None, writer=None, loss_fn=None, reg_fn=None, lambda_reg=0., results_dir=None, gene_samples=1):
     device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.eval()
     val_loss_surv, val_loss = 0., 0.
@@ -278,8 +278,11 @@ def validate_survival(cur, epoch, model, loader, n_classes, early_stopping=None,
         label = label.to(device)
         c = c.to(device)
 
+        risk = 0
         with torch.no_grad():
-            hazards, S, Y_hat, _, _ = model(data_WSI) # return hazards, S, Y_hat, A_raw, results_dict
+            for i in range(gene_samples):
+                hazards, S, Y_hat, _, _ = model(data_WSI[i]) # return hazards, S, Y_hat, A_raw, results_dict
+                risk += -torch.sum(S, dim=1).cpu().numpy()
 
         loss = loss_fn(hazards=hazards, S=S, Y=label, c=c, alpha=0)
         loss_value = loss.item()
@@ -289,8 +292,7 @@ def validate_survival(cur, epoch, model, loader, n_classes, early_stopping=None,
         else:
             loss_reg = reg_fn(model) * lambda_reg
 
-        risk = -torch.sum(S, dim=1).cpu().numpy()
-        all_risk_scores[batch_idx] = risk
+        all_risk_scores[batch_idx] = risk / gene_samples
         all_censorships[batch_idx] = c.cpu().numpy()
         all_event_times[batch_idx] = event_time
 
@@ -300,6 +302,8 @@ def validate_survival(cur, epoch, model, loader, n_classes, early_stopping=None,
     val_loss_surv /= len(loader)
     val_loss /= len(loader)
     c_index = concordance_index_censored((1-all_censorships).astype(bool), all_event_times, all_risk_scores, tied_tol=1e-08)[0]
+    
+    print('Epoch: {}, val_loss_surv: {:.4f}, val_loss: {:.4f}, val_c_index: {:.4f}'.format(epoch, val_loss_surv, val_loss, c_index))
 
     if writer:
         writer.add_scalar('val/loss_surv', val_loss_surv, epoch)
@@ -317,7 +321,7 @@ def validate_survival(cur, epoch, model, loader, n_classes, early_stopping=None,
     return False
 
 
-def summary_survival(model, loader, n_classes):
+def summary_survival(model, loader, n_classes, gene_samples=1):
     device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.eval()
     test_loss = 0.
@@ -335,13 +339,15 @@ def summary_survival(model, loader, n_classes):
         
         slide_id = slide_ids.iloc[batch_idx]
 
+        risk = 0
         with torch.no_grad():
-            hazards, survival, Y_hat, _, _ = model(data_WSI)
+            for i in range(gene_samples):
+                hazards, S, Y_hat, _, _ = model(data_WSI[i]) # return hazards, S, Y_hat, A_raw, results_dict
+                risk += -torch.sum(S, dim=1).cpu().numpy()
 
-        risk = np.asscalar(-torch.sum(survival, dim=1).cpu().numpy())
         event_time = np.asscalar(event_time)
         c = np.asscalar(c)
-        all_risk_scores[batch_idx] = risk
+        all_risk_scores[batch_idx] = risk / gene_samples
         all_censorships[batch_idx] = c
         all_event_times[batch_idx] = event_time
         patient_results.update({slide_id: {'slide_id': np.array(slide_id), 'risk': risk, 'disc_label': label.item(), 'survival': event_time, 'censorship': c}})

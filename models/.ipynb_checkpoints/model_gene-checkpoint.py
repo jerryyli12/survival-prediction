@@ -44,7 +44,7 @@ def load_ckpt(ckpt_path: str, model: BertModel, optimizer: BertAdam):
     return model
     
 class GENE_FC(nn.Module):
-    def __init__(self, dropout=0.25, n_classes=4):
+    def __init__(self, freeze_BERT, pretrain_BERT, dropout=0.25, n_classes=4):
         super(GENE_FC, self).__init__()
         config_dir = '../multimodal-histo-gene/pytorch-pretrained-BERT-master/configs'
         config_name = 'config_mutation_final'
@@ -68,7 +68,14 @@ class GENE_FC(nn.Module):
                          lr=config.learning_rate,
                          warmup=config.warmup_proportion,)
         
-        model = load_ckpt(ckpt_path, model, optimizer)
+        if pretrain_BERT:
+            print("Loading pretrained BERT model")
+            model = load_ckpt(ckpt_path, model, optimizer)
+        if freeze_BERT:
+            print("Freezing BERT")
+            for param in model.parameters():
+                param.requires_grad = False
+            print("Done")
         
         print(model)
         self.model = model
