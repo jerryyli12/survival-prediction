@@ -190,14 +190,19 @@ def train(datasets: tuple, cur: int, args: Namespace):
     monitor_cindex = Monitor_CIndex()
     print('Done!')
 
+    train_c, train_loss, val_c, val_loss = [], [], [], []
     for epoch in range(args.max_epochs):
         if args.task_type == 'survival':
             if args.mode == 'coattn':
                 train_loop_survival_coattn(epoch, model, train_loader, optimizer, args.n_classes, writer, loss_fn, reg_fn, args.lambda_reg, args.gc)
                 stop = validate_survival_coattn(cur, epoch, model, val_loader, args.n_classes, early_stopping, monitor_cindex, writer, loss_fn, reg_fn, args.lambda_reg, args.results_dir, args.gene_samples)
             else:
-                train_loop_survival(epoch, model, train_loader, optimizer, args.n_classes, writer, loss_fn, reg_fn, args.lambda_reg, args.gc)
-                stop = validate_survival(cur, epoch, model, val_loader, args.n_classes, early_stopping, monitor_cindex, writer, loss_fn, reg_fn, args.lambda_reg, args.results_dir, args.gene_samples)
+                t_c, t_l = train_loop_survival(epoch, model, train_loader, optimizer, args.n_classes, writer, loss_fn, reg_fn, args.lambda_reg, args.gc)
+                stop, v_c, v_l = validate_survival(cur, epoch, model, val_loader, args.n_classes, early_stopping, monitor_cindex, writer, loss_fn, reg_fn, args.lambda_reg, args.results_dir, args.gene_samples)
+                train_c.append(t_c)
+                train_loss.append(t_l)
+                val_c.append(v_c)
+                val_loss.append(v_l)
 
     torch.save(model.state_dict(), os.path.join(args.results_dir, "s_{}_checkpoint.pt".format(cur)))
     model.load_state_dict(torch.load(os.path.join(args.results_dir, "s_{}_checkpoint.pt".format(cur))))
@@ -223,7 +228,7 @@ def train_loop_survival(epoch, model, loader, optimizer, n_classes, writer=None,
         label = label.to(device)
         c = c.to(device)
 
-        hazards, S, Y_hat, _, _ = model(data_WSI) # return hazards, S, Y_hat, A_raw, results_dict
+        hazards, S, Y_hat, _, _ = model(data_WSI[0]) # return hazards, S, Y_hat, A_raw, results_dict
         loss = loss_fn(hazards=hazards, S=S, Y=label, c=c)
         loss_value = loss.item()
 
@@ -263,6 +268,8 @@ def train_loop_survival(epoch, model, loader, optimizer, n_classes, writer=None,
         writer.add_scalar('train/loss_surv', train_loss_surv, epoch)
         writer.add_scalar('train/loss', train_loss, epoch)
         writer.add_scalar('train/c_index', c_index, epoch)
+        
+    return c_index, train_loss_surv
 
 
 def validate_survival(cur, epoch, model, loader, n_classes, early_stopping=None, monitor_cindex=None, writer=None, loss_fn=None, reg_fn=None, lambda_reg=0., results_dir=None, gene_samples=1):
@@ -316,9 +323,9 @@ def validate_survival(cur, epoch, model, loader, n_classes, early_stopping=None,
         
         if early_stopping.early_stop:
             print("Early stopping")
-            return True
+            return True, c_index, val_loss
 
-    return False
+    return False, c_index, val_loss
 
 
 def summary_survival(model, loader, n_classes, gene_samples=1):

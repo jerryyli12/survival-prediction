@@ -31,7 +31,7 @@ def set_all_seed(seed: int = 42) -> None:
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     
-def load_ckpt(ckpt_path: str, model: BertModel, optimizer: BertAdam):
+def load_ckpt(ckpt_path: str, model: BertModel):
     """
     load a model weights
     :param ckpt_path:
@@ -48,29 +48,43 @@ class GENE_FC(nn.Module):
         super(GENE_FC, self).__init__()
         config_dir = '../multimodal-histo-gene/pytorch-pretrained-BERT-master/configs'
         config_name = 'config_mutation_final'
-        ckpt_path = '../multimodal-histo-gene/pytorch-pretrained-BERT-master/models/best_model/mutation_best_model_10k.pt'
+        ckpt_path = '../multimodal-histo-gene/pytorch-pretrained-BERT-master/models/mutation/best_model/sleek-sweep-1_fold_0.pt'
         
-        gene_list_path = '../multimodal-histo-gene/Mutation/data/gene_list_brca_final.txt'
+        gene_list_path = '../multimodal-histo-gene/pytorch-pretrained-BERT-master/data/Mutation/mut_gene_list_gene2vec_brca.txt'
         gene_list = np.loadtxt(gene_list_path, dtype=str)
         
         config = BertConfig.from_json_file(os.path.join(config_dir, config_name+".json"))
+        # config = BertConfig(
+        #     vocab_size_or_config_json_file=config.vocab_size,
+        #     hidden_size=config.hidden_size,
+        #     num_hidden_layers=config.num_hidden_layers,
+        #     num_attention_heads=config.num_attention_heads,
+        #     num_quantiles=config.num_quantiles,
+        #     intermediate_size=config.intermediate_size,
+        #     hidden_act=config.hidden_act,
+        #     hidden_dropout_prob=config.hidden_dropout_prob,
+        #     attention_probs_dropout_prob=config.attention_probs_dropout_prob,
+        #     initializer_range=config.initializer_range,
+        #     rnaseq=config.rnaseq
+        # )
+        
         set_all_seed(seed=config.seed)
         model = BertModel(config, gene_list)
 
         # Initialise Optimizer
-        param_optimizer = list(model.named_parameters())
-        no_decay = ['bias', 'gamma', 'beta']
-        optimizer_grouped_parameters = [
-            {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay_rate': 0.0001},
-            {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay_rate': 0.0}
-        ]
-        optimizer = BertAdam(optimizer_grouped_parameters,
-                         lr=config.learning_rate,
-                         warmup=config.warmup_proportion,)
+        # param_optimizer = list(model.named_parameters())
+        # no_decay = ['bias', 'gamma', 'beta']
+        # optimizer_grouped_parameters = [
+        #     {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay_rate': 0.0001},
+        #     {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay_rate': 0.0}
+        # ]
+        # optimizer = BertAdam(optimizer_grouped_parameters,
+        #                  lr=config.learning_rate,
+        #                  warmup=config.warmup_proportion,)
         
         if pretrain_BERT:
             print("Loading pretrained BERT model")
-            model = load_ckpt(ckpt_path, model, optimizer)
+            model = load_ckpt(ckpt_path, model)
         if freeze_BERT:
             print("Freezing BERT")
             for param in model.parameters():

@@ -45,7 +45,6 @@ class Generic_WSI_Survival_Dataset(Dataset):
             np.random.seed(seed)
             np.random.shuffle(slide_data)
 
-
         slide_data = pd.read_csv(csv_path, low_memory=False)
         #slide_data = slide_data.drop(['Unnamed: 0'], axis=1)
         if 'case_id' not in slide_data:
@@ -128,6 +127,7 @@ class Generic_WSI_Survival_Dataset(Dataset):
         else:
             self.signatures = None
             
+        ### EDITS START HERE
         self.min_mutation_nb = 20
         self.mutation_sampling_nb = 100
         self.eval = False
@@ -136,39 +136,84 @@ class Generic_WSI_Survival_Dataset(Dataset):
         # map all genes to predetermined order
         # start at 1 (because 0 is for CLS)
         
-        data_path = '../multimodal-histo-gene/Mutation/data/mut_data_brca_final.csv'
-        gene_list_path = '../multimodal-histo-gene/Mutation/data/gene_list_brca_final.txt'
+        data_path = '../multimodal-histo-gene/pytorch-pretrained-BERT-master/data/Mutation/mut_data_gene2vec_brca.csv'
+        # data_path = '../multimodal-histo-gene/Mutation/data/mut_data_brca_final.csv'
+        gene_list_path = '../multimodal-histo-gene/pytorch-pretrained-BERT-master/data/Mutation/mut_gene_list_gene2vec_brca.txt'
+        self.rnaseq = False
+        self.vocab_size = 4
         
         gene_list = np.loadtxt(gene_list_path, dtype=str)
-        df = pd.read_csv(data_path, sep=",", index_col=0, dtype=str)
         
-        mutation_vocab = {
-            "CLS": 0,
-            "MASK": 20,
-            np.nan: 1,
-            "Missense_Mutation": 2,
-            "Silent": 3,
-            "3'UTR": 4,
-            "Nonsense_Mutation": 5,
-            "5'UTR": 6,
-            "Frame_Shift_Del": 7,
-            "Intron": 8,
-            "RNA": 9,
-            "Splice_Site": 10,
-            "In_Frame_Del": 11,
-            "Splice_Region": 12,
-            "Frame_Shift_Ins": 13,
-            "3'Flank": 14,
-            "5'Flank": 15,
-            "Translation_Start_Site": 16,
-            "Nonstop_Mutation": 17,
-            "In_Frame_Ins": 18,
-            "IGR": 19
-        }
+        if data_path.endswith(".csv"):
+            df = pd.read_csv(data_path, sep=",", index_col=0)
+        elif data_path.endswith(".pkl"):
+            df = pd.read_pickle(data_path, compression='zip')
+            if self.rnaseq:
+                df = df.astype("float32")
+            else:
+                df = df.astype("category")
+        else:
+            raise NotImplementedError
+            
+        if self.rnaseq:
+            pass
+        else:
+            if self.vocab_size == 4:
+                mutation_vocab = {
+                    "CLS": 0,
+                    "MASK": 3,
+                    "Not_mutated": 1,
+                    np.nan: np.nan,  # nan -> not measured => not sampled
+                    "Missense_Mutation": 2,
+                    "Silent": 2,
+                    "3'UTR": 2,
+                    "Nonsense_Mutation": 2,
+                    "5'UTR": 2,
+                    "Frame_Shift_Del": 2,
+                    "Intron": 2,
+                    "RNA": 2,
+                    "Splice_Site": 2,
+                    "In_Frame_Del": 2,
+                    "Splice_Region": 2,
+                    "Frame_Shift_Ins": 2,
+                    "3'Flank": 2,
+                    "5'Flank": 2,
+                    "Translation_Start_Site": 2,
+                    "Nonstop_Mutation": 2,
+                    "In_Frame_Ins": 2,
+                    "IGR": 2
+                }
+            else:
+                mutation_vocab = {
+                    "CLS": 0,
+                    "MASK": 20,
+                    "Not_mutated": 1,
+                    np.nan: np.nan,  # nan -> not measured => not sampled
+                    "Missense_Mutation": 2,
+                    "Silent": 3,
+                    "3'UTR": 4,
+                    "Nonsense_Mutation": 5,
+                    "5'UTR": 6,
+                    "Frame_Shift_Del": 7,
+                    "Intron": 8,
+                    "RNA": 9,
+                    "Splice_Site": 10,
+                    "In_Frame_Del": 11,
+                    "Splice_Region": 12,
+                    "Frame_Shift_Ins": 13,
+                    "3'Flank": 14,
+                    "5'Flank": 15,
+                    "Translation_Start_Site": 16,
+                    "Nonstop_Mutation": 17,
+                    "In_Frame_Ins": 18,
+                    "IGR": 19
+                }
         
         gene_map = {gene: i+1 for i, gene in enumerate(gene_list)}  # {'g1': 1, 'g2': 2, 'g3': 3, ...}
         # change patient name to patient id (from 0 to num_patient)
-        patient_map = {patient_id: i for i, patient_id in enumerate(df.index.to_list())}
+        if isinstance(df.index, pd.MultiIndex):
+            df.index = df.index.map(lambda x: '_'.join(map(str, x)))
+        # patient_map = {patient_id: i for i, patient_id in enumerate(df.index.to_list())}
         df_t = df.T
         # map genes to gene code (coming from gene_map)
         df_t['gene_ids'] = df_t.index.map(gene_map)
