@@ -94,7 +94,7 @@ parser.add_argument('--log_data',        action='store_true', default=True, help
 parser.add_argument('--overwrite',     	 action='store_true', default=False, help='Whether or not to overwrite experiments (if already ran)')
 
 ### Model Parameters.
-parser.add_argument('--mode',            type=str, choices=['omic', 'path', 'pathomic', 'cluster', 'coattn', 'pyramid'], default='coattn', help='Specifies which modalities to use / collate function in dataloader.')
+parser.add_argument('--mode',            type=str, choices=['omic', 'path', 'pathomic', 'cluster', 'coattn', 'pyramid', 'mutation', 'rnaseq', 'multimodal'], default='coattn', help='Specifies which modalities to use / collate function in dataloader.')
 parser.add_argument('--fusion',          type=str, choices=['None', 'concat', 'bilinear'], default='None', help='Type of fusion. (Default: concat).')
 parser.add_argument('--apply_sig',		 action='store_true', default=False, help='Use genomic features as signature embeddings.')
 parser.add_argument('--apply_sigfeats',  action='store_true', default=False, help='Use genomic features as tabular features.')

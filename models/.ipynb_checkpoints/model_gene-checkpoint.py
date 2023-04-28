@@ -44,13 +44,23 @@ def load_ckpt(ckpt_path: str, model: BertModel):
     return model
     
 class GENE_FC(nn.Module):
-    def __init__(self, freeze_BERT, pretrain_BERT, dropout=0.25, n_classes=4):
+    def __init__(self, freeze_BERT, pretrain_BERT, mode, dropout=0.25, n_classes=4):
         super(GENE_FC, self).__init__()
         config_dir = '../multimodal-histo-gene/pytorch-pretrained-BERT-master/configs'
-        config_name = 'config_mutation_final'
-        ckpt_path = '../multimodal-histo-gene/pytorch-pretrained-BERT-master/models/mutation/best_model/sleek-sweep-1_fold_0.pt'
         
-        gene_list_path = '../multimodal-histo-gene/pytorch-pretrained-BERT-master/data/Mutation/mut_gene_list_gene2vec_brca.txt'
+        if mode == 'mutation':
+            print('Using Mutation model')
+            config_name = 'config_mutation_final'
+            ckpt_path = '../multimodal-histo-gene/pytorch-pretrained-BERT-master/models/mutation/best_model/floral-sweep-1_fold_0.pt'
+            gene_list_path = '../multimodal-histo-gene/pytorch-pretrained-BERT-master/data/Mutation/mut_gene_list_gene2vec_brca.txt'
+        elif mode == 'rnaseq':
+            print('Using RNASeq model')
+            config_name = 'config_mutation_final'  # this probably needs to be fixed
+            ckpt_path = '../multimodal-histo-gene/pytorch-pretrained-BERT-master/models/rna_seq/best_model/logical-sweep-1_fold_0.pt'
+            gene_list_path = '../multimodal-histo-gene/pytorch-pretrained-BERT-master/data/RNAseq/rna_gene_list_gene2vec_brca.txt'
+        else:
+            raise NotImplementedError
+            
         gene_list = np.loadtxt(gene_list_path, dtype=str)
         
         config = BertConfig.from_json_file(os.path.join(config_dir, config_name+".json"))
@@ -67,7 +77,7 @@ class GENE_FC(nn.Module):
         #     initializer_range=config.initializer_range,
         #     rnaseq=config.rnaseq
         # )
-        
+        config.rnaseq = mode == 'rnaseq'
         set_all_seed(seed=config.seed)
         model = BertModel(config, gene_list)
 

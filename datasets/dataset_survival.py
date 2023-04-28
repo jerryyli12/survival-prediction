@@ -46,6 +46,7 @@ class Generic_WSI_Survival_Dataset(Dataset):
             np.random.shuffle(slide_data)
 
         slide_data = pd.read_csv(csv_path, low_memory=False)
+        print(slide_data)
         #slide_data = slide_data.drop(['Unnamed: 0'], axis=1)
         if 'case_id' not in slide_data:
             slide_data.index = slide_data.index.str[:12]
@@ -116,7 +117,7 @@ class Generic_WSI_Survival_Dataset(Dataset):
         self.metadata = slide_data.columns[:12]
         self.mode = mode
         self.cls_ids_prep()
-        
+                
         if print_info:
             self.summarize()
 
@@ -128,103 +129,145 @@ class Generic_WSI_Survival_Dataset(Dataset):
             self.signatures = None
             
         ### EDITS START HERE
+        self.gene_samples = 1
+        
+        ### MUTATION STUFF
         self.min_mutation_nb = 20
         self.mutation_sampling_nb = 100
-        self.eval = False
-        
-        self.gene_samples = 1
-        # map all genes to predetermined order
-        # start at 1 (because 0 is for CLS)
-        
-        data_path = '../multimodal-histo-gene/pytorch-pretrained-BERT-master/data/Mutation/mut_data_gene2vec_brca.csv'
-        # data_path = '../multimodal-histo-gene/Mutation/data/mut_data_brca_final.csv'
-        gene_list_path = '../multimodal-histo-gene/pytorch-pretrained-BERT-master/data/Mutation/mut_gene_list_gene2vec_brca.txt'
-        self.rnaseq = False
         self.vocab_size = 4
+        self.mut_df = None
         
-        gene_list = np.loadtxt(gene_list_path, dtype=str)
-        
-        if data_path.endswith(".csv"):
-            df = pd.read_csv(data_path, sep=",", index_col=0)
-        elif data_path.endswith(".pkl"):
-            df = pd.read_pickle(data_path, compression='zip')
-            if self.rnaseq:
-                df = df.astype("float32")
+        if self.mode == 'mutation' or self.mode == 'multimodal':
+            if os.path.isfile('mut_df.csv'):
+                self.mut_df = pd.read_csv('mut_df.csv')
             else:
-                df = df.astype("category")
-        else:
-            raise NotImplementedError
-            
-        if self.rnaseq:
-            pass
-        else:
-            if self.vocab_size == 4:
-                mutation_vocab = {
-                    "CLS": 0,
-                    "MASK": 3,
-                    "Not_mutated": 1,
-                    np.nan: np.nan,  # nan -> not measured => not sampled
-                    "Missense_Mutation": 2,
-                    "Silent": 2,
-                    "3'UTR": 2,
-                    "Nonsense_Mutation": 2,
-                    "5'UTR": 2,
-                    "Frame_Shift_Del": 2,
-                    "Intron": 2,
-                    "RNA": 2,
-                    "Splice_Site": 2,
-                    "In_Frame_Del": 2,
-                    "Splice_Region": 2,
-                    "Frame_Shift_Ins": 2,
-                    "3'Flank": 2,
-                    "5'Flank": 2,
-                    "Translation_Start_Site": 2,
-                    "Nonstop_Mutation": 2,
-                    "In_Frame_Ins": 2,
-                    "IGR": 2
-                }
-            else:
-                mutation_vocab = {
-                    "CLS": 0,
-                    "MASK": 20,
-                    "Not_mutated": 1,
-                    np.nan: np.nan,  # nan -> not measured => not sampled
-                    "Missense_Mutation": 2,
-                    "Silent": 3,
-                    "3'UTR": 4,
-                    "Nonsense_Mutation": 5,
-                    "5'UTR": 6,
-                    "Frame_Shift_Del": 7,
-                    "Intron": 8,
-                    "RNA": 9,
-                    "Splice_Site": 10,
-                    "In_Frame_Del": 11,
-                    "Splice_Region": 12,
-                    "Frame_Shift_Ins": 13,
-                    "3'Flank": 14,
-                    "5'Flank": 15,
-                    "Translation_Start_Site": 16,
-                    "Nonstop_Mutation": 17,
-                    "In_Frame_Ins": 18,
-                    "IGR": 19
-                }
+                mut_data_path = '../multimodal-histo-gene/pytorch-pretrained-BERT-master/data/Mutation/mut_data_gene2vec_brca.csv'
+                mut_gene_list_path = '../multimodal-histo-gene/pytorch-pretrained-BERT-master/data/Mutation/mut_gene_list_gene2vec_brca.txt'
+                mut_gene_list = np.loadtxt(mut_gene_list_path, dtype=str)
+
+                if mut_data_path.endswith(".csv"):
+                    df = pd.read_csv(mut_data_path, sep=",", index_col=0)
+                elif mut_data_path.endswith(".pkl"):
+                    df = pd.read_pickle(mut_data_path, compression='zip')
+                    df = df.astype("category")
+                else:
+                    raise NotImplementedError
+
+                if self.vocab_size == 4:
+                    mutation_vocab = {
+                        "CLS": 0,
+                        "MASK": 3,
+                        "Not_mutated": 1,
+                        np.nan: np.nan,  # nan -> not measured => not sampled
+                        "Missense_Mutation": 2,
+                        "Silent": 2,
+                        "3'UTR": 2,
+                        "Nonsense_Mutation": 2,
+                        "5'UTR": 2,
+                        "Frame_Shift_Del": 2,
+                        "Intron": 2,
+                        "RNA": 2,
+                        "Splice_Site": 2,
+                        "In_Frame_Del": 2,
+                        "Splice_Region": 2,
+                        "Frame_Shift_Ins": 2,
+                        "3'Flank": 2,
+                        "5'Flank": 2,
+                        "Translation_Start_Site": 2,
+                        "Nonstop_Mutation": 2,
+                        "In_Frame_Ins": 2,
+                        "IGR": 2
+                    }
+                else:
+                    mutation_vocab = {
+                        "CLS": 0,
+                        "MASK": 20,
+                        "Not_mutated": 1,
+                        np.nan: np.nan,  # nan -> not measured => not sampled
+                        "Missense_Mutation": 2,
+                        "Silent": 3,
+                        "3'UTR": 4,
+                        "Nonsense_Mutation": 5,
+                        "5'UTR": 6,
+                        "Frame_Shift_Del": 7,
+                        "Intron": 8,
+                        "RNA": 9,
+                        "Splice_Site": 10,
+                        "In_Frame_Del": 11,
+                        "Splice_Region": 12,
+                        "Frame_Shift_Ins": 13,
+                        "3'Flank": 14,
+                        "5'Flank": 15,
+                        "Translation_Start_Site": 16,
+                        "Nonstop_Mutation": 17,
+                        "In_Frame_Ins": 18,
+                        "IGR": 19
+                    }
+
+                gene_map = {gene: i+1 for i, gene in enumerate(mut_gene_list)}  # {'g1': 1, 'g2': 2, 'g3': 3, ...}
+                # change patient name to patient id (from 0 to num_patient)
+                if isinstance(df.index, pd.MultiIndex):
+                    df.index = df.index.map(lambda x: '_'.join(map(str, x)))
+                # patient_map = {patient_id: i for i, patient_id in enumerate(df.index.to_list())}
+                df_t = df.T
+                # map genes to gene code (coming from gene_map)
+                df_t['gene_ids'] = df_t.index.map(gene_map)
+                # get columns: gene_ids, patient_ids, mutation_ids
+                self.mut_df = pd.melt(df_t, id_vars=['gene_ids'], var_name='patient_ids', value_name='mutation_ids')
+                # replace patient name to patient indices
+                self.mut_df['patient_ids'] = self.mut_df['patient_ids'].map(lambda x: x[:-3])
+                # replace mutation name to mutation indices (coming from mutation_vocab)
+                self.mut_df['mutation_ids'] = self.mut_df['mutation_ids'].map(mutation_vocab)
+                self.mut_df.to_csv('mut_df.csv')
+                
+            print(self.mut_df)
+            print(self.mut_df['mutation_ids'].value_counts())
         
-        gene_map = {gene: i+1 for i, gene in enumerate(gene_list)}  # {'g1': 1, 'g2': 2, 'g3': 3, ...}
-        # change patient name to patient id (from 0 to num_patient)
-        if isinstance(df.index, pd.MultiIndex):
-            df.index = df.index.map(lambda x: '_'.join(map(str, x)))
-        # patient_map = {patient_id: i for i, patient_id in enumerate(df.index.to_list())}
-        df_t = df.T
-        # map genes to gene code (coming from gene_map)
-        df_t['gene_ids'] = df_t.index.map(gene_map)
-        # get columns: gene_ids, patient_ids, mutation_ids
-        self.df = pd.melt(df_t, id_vars=['gene_ids'], var_name='patient_ids', value_name='mutation_ids')
-        # replace patient name to patient indices
-        self.df['patient_ids'] = self.df['patient_ids'].map(lambda x: x[:-3])
-#         # replace mutation name to mutation indices (coming from mutation_vocab)
-        self.df['mutation_ids'] = self.df['mutation_ids'].map(mutation_vocab)
-        print(self.df)
-        print(self.df['mutation_ids'].value_counts())
+        ### RNASEQ STUFF
+        self.sampling_nb = 100
+        self.num_quantiles = 5
+        self.rna_df = None
+        
+        if self.mode == 'rnaseq' or self.mode == 'multimodal':
+            if os.path.isfile('rna_df.csv'):
+                self.rna_df = pd.read_csv('rna_df.csv')
+            else:
+                rna_data_path = '../multimodal-histo-gene/pytorch-pretrained-BERT-master/data/RNAseq/rna_data_gene2vec_brca.csv'
+                rna_gene_list_path = '../multimodal-histo-gene/pytorch-pretrained-BERT-master/data/RNAseq/rna_gene_list_gene2vec_brca.txt'
+                rna_gene_list = np.loadtxt(rna_gene_list_path, dtype=str)
+
+                if rna_data_path.endswith(".csv"):
+                    df = pd.read_csv(rna_data_path, sep=",", index_col=0)
+                elif rna_data_path.endswith(".pkl"):
+                    df = pd.read_pickle(rna_data_path, compression='zip')
+                    df = df.astype("float32")
+                else:
+                    raise NotImplementedError
+
+                bins_cut = [-float("inf"), -0.84, -0.25, 0.25, 0.84, float("inf")]
+                labels_list = list(range(1, self.num_quantiles + 1))
+                pd.options.mode.chained_assignment = None
+                for i, gene in enumerate(df.columns):
+                    print(i, gene)
+                    df[gene] = pd.cut(df[gene], bins=bins_cut, labels=labels_list)
+
+                gene_map = {gene: i+1 for i, gene in enumerate(rna_gene_list)}  # {'g1': 1, 'g2': 2, 'g3': 3, ...}
+                # if multiple index -> join to 1
+                if isinstance(df.index, pd.MultiIndex):
+                    df.index = df.index.map(lambda x: '_'.join(map(str, x)))
+                # change patient name to patient id (from 0 to num_patient)
+                # patient_map = {patient_id: i for i, patient_id in enumerate(df.index.to_list())}
+                df_t = df.T
+                # map genes to gene code (coming from gene_map)
+                df_t['gene_ids'] = df_t.index.map(gene_map)
+                # get columns: gene_ids, patient_ids, rnaseq_bin
+                self.rna_df = pd.melt(df_t, id_vars=['gene_ids'], var_name='patient_ids', value_name='rnaseq_bin')
+                self.rna_df[['rnaseq_bin']] = self.rna_df[['rnaseq_bin']].astype(int)
+                # replace patient name with patient indices
+                self.rna_df['patient_ids'] = self.rna_df['patient_ids'].map(lambda x: x[:-3])
+                self.rna_df.to_csv('rna_df.csv')
+                
+            print(self.rna_df)
 
 
     def cls_ids_prep(self):
@@ -281,7 +324,7 @@ class Generic_WSI_Survival_Dataset(Dataset):
         if len(split) > 0:
             mask = self.slide_data['slide_id'].isin(split.tolist())
             df_slice = self.slide_data[mask].reset_index(drop=True)
-            split = Generic_Split(df_slice, metadata=self.metadata, mode=self.mode, signatures=self.signatures, data_dir=self.data_dir, label_col=self.label_col, patient_dict=self.patient_dict, num_classes=self.num_classes, df=self.df, min_nb=self.min_mutation_nb, samp_nb=self.mutation_sampling_nb, gene_samples=self.gene_samples, split_key=split_key)
+            split = Generic_Split(df_slice, metadata=self.metadata, mode=self.mode, signatures=self.signatures, data_dir=self.data_dir, label_col=self.label_col, patient_dict=self.patient_dict, num_classes=self.num_classes, mut_df=self.mut_df, rna_df = self.rna_df, min_mutation_nb=self.min_mutation_nb, mutation_sampling_nb=self.mutation_sampling_nb, sampling_nb=self.sampling_nb, gene_samples=self.gene_samples, split_key=split_key)
         else:
             split = None
         
@@ -323,7 +366,7 @@ class Generic_WSI_Survival_Dataset(Dataset):
 
 class Generic_MIL_Survival_Dataset(Generic_WSI_Survival_Dataset):
     def __init__(self, data_dir, gene_samples=1, mode: str='omic', **kwargs):
-        super(Generic_MIL_Survival_Dataset, self).__init__(**kwargs)
+        super(Generic_MIL_Survival_Dataset, self).__init__(mode=mode, **kwargs)
         self.data_dir = data_dir
         self.mode = mode
         self.use_h5 = False
@@ -336,6 +379,7 @@ class Generic_MIL_Survival_Dataset(Generic_WSI_Survival_Dataset):
         case_id = self.slide_data['case_id'][idx]
         label = self.slide_data['disc_label'][idx]
         event_time = self.slide_data[self.label_col][idx]
+        
         c = self.slide_data['censorship'][idx]
         slide_ids = self.patient_dict[case_id]
 
@@ -346,8 +390,8 @@ class Generic_MIL_Survival_Dataset(Generic_WSI_Survival_Dataset):
             data_dir = self.data_dir
         
         if not self.use_h5:
-            if True:  # temp for gene stuff
-                df_item_og = self.df[self.df['patient_ids'] == case_id]
+            if self.mode == 'mutation':
+                df_item_og = self.mut_df[self.mut_df['patient_ids'] == case_id]
                 all_samples = []
                 for i in range(self.gene_samples):
                     df_item = df_item_og.copy()
@@ -372,7 +416,18 @@ class Generic_MIL_Survival_Dataset(Generic_WSI_Survival_Dataset):
                     tokens = torch.LongTensor(df_item[['gene_ids', 'mutation_ids']].values)
                     all_samples.append(torch.cat((torch.LongTensor([0, 0]).unsqueeze(dim=0), tokens), dim=0))
                 return torch.stack(all_samples), torch.zeros((1,1)), label, event_time, c
-            if self.mode == 'pyramid':
+            elif self.mode == 'rnaseq':
+                df_item_og = self.rna_df[self.rna_df['patient_ids'] == case_id]
+                all_samples = []
+                for i in range(self.gene_samples):
+                    df_item = df_item_og.copy()
+                    if self.sampling_nb < df_item.shape[0]:
+                        df_item = df_item[df_item['rnaseq_bin'] > 0].sample(n=self.sampling_nb, )
+                    # return tuple of longtensors (gene_inds, mutation_inds) with CLS at the beginning
+                    tokens = torch.LongTensor(df_item[['gene_ids', 'rnaseq_bin']].values)
+                    all_samples.append(torch.cat((torch.LongTensor([0, 0]).unsqueeze(dim=0), tokens), dim=0))
+                return torch.stack(all_samples), torch.zeros((1,1)), label, event_time, c
+            elif self.mode == 'pyramid':
                 path_features = []
                 for slide_id in slide_ids:
                     full_path = os.path.join(data_dir, '{}.pt'.format(slide_id.replace(".svs","")))
@@ -382,13 +437,13 @@ class Generic_MIL_Survival_Dataset(Generic_WSI_Survival_Dataset):
                         print("yikes")
                         path_features.append(torch.zeros((1, 192)))
                 path_features = torch.cat(path_features, dim=0)
-                return path_features, torch.zeros((1,1)), label, event_time, c
+                return path_features.unsqueeze(dim=0), torch.zeros((1,1)), label, event_time, c
         else:
             return None
 
 
 class Generic_Split(Generic_MIL_Survival_Dataset):
-    def __init__(self, slide_data, metadata, mode, df, min_nb, samp_nb, gene_samples, split_key, signatures=None, data_dir=None, label_col=None, patient_dict=None, num_classes=2):
+    def __init__(self, slide_data, metadata, mode, mut_df, rna_df, min_mutation_nb, mutation_sampling_nb, sampling_nb, gene_samples, split_key, signatures=None, data_dir=None, label_col=None, patient_dict=None, num_classes=2):
         self.use_h5 = False
         self.slide_data = slide_data
         self.metadata = metadata
@@ -397,9 +452,11 @@ class Generic_Split(Generic_MIL_Survival_Dataset):
         self.num_classes = num_classes
         self.label_col = label_col
         self.patient_dict = patient_dict
-        self.df = df
-        self.min_mutation_nb = min_nb
-        self.mutation_sampling_nb = samp_nb
+        self.mut_df = mut_df
+        self.rna_df = rna_df
+        self.min_mutation_nb = min_mutation_nb
+        self.mutation_sampling_nb = mutation_sampling_nb
+        self.sampling_nb = sampling_nb
         if split_key == 'train':
             self.gene_samples = 1
         else:
@@ -408,39 +465,5 @@ class Generic_Split(Generic_MIL_Survival_Dataset):
         for i in range(self.num_classes):
             self.slide_cls_ids[i] = np.where(self.slide_data['label'] == i)[0]
 
-        ### --> Initializing genomic features in Generic Split
-#         self.genomic_features = self.slide_data.drop(self.metadata, axis=1)
-#         self.signatures = signatures
-
-#         with open(os.path.join(data_dir, 'fast_cluster_ids.pkl'), 'rb') as handle:
-#             self.fname2ids = pickle.load(handle)
-
-#         def series_intersection(s1, s2):
-#             return pd.Series(list(set(s1) & set(s2)))
-
-#         if self.signatures is not None:
-#             self.omic_names = []
-#             for col in self.signatures.columns:
-#                 omic = self.signatures[col].dropna().unique()
-#                 omic = np.concatenate([omic+mode for mode in ['_mut', '_cnv', '_rnaseq']])
-#                 omic = sorted(series_intersection(omic, self.genomic_features.columns))
-#                 self.omic_names.append(omic)
-#             self.omic_sizes = [len(omic) for omic in self.omic_names]
-#         print("Shape", self.genomic_features.shape)
-        ### <--
-
     def __len__(self):
         return len(self.slide_data)
-
-    ### --> Getting StandardScaler of self.genomic_features
-#     def get_scaler(self):
-#         scaler_omic = StandardScaler().fit(self.genomic_features)
-#         return (scaler_omic,)
-    ### <--
-
-    ### --> Applying StandardScaler to self.genomic_features
-#     def apply_scaler(self, scalers: tuple=None):
-#         transformed = pd.DataFrame(scalers[0].transform(self.genomic_features))
-#         transformed.columns = self.genomic_features.columns
-#         self.genomic_features = transformed
-    ### <--

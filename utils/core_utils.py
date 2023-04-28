@@ -159,7 +159,7 @@ def train(datasets: tuple, cur: int, args: Namespace):
     elif args.model_type == 'hipt_lgp':
         model = HIPT_LGP_FC(**model_dict, freeze_4k=args.freeze_4k, pretrain_4k=args.pretrain_4k, freeze_WSI=args.freeze_WSI, pretrain_WSI=args.pretrain_WSI)
     elif args.model_type == 'gene':
-        model = GENE_FC(**model_dict, pretrain_BERT=args.pretrain_BERT, freeze_BERT=args.freeze_BERT)
+        model = GENE_FC(**model_dict, pretrain_BERT=args.pretrain_BERT, freeze_BERT=args.freeze_BERT, mode=args.mode)
     else:
         raise NotImplementedError
     
@@ -190,7 +190,6 @@ def train(datasets: tuple, cur: int, args: Namespace):
     monitor_cindex = Monitor_CIndex()
     print('Done!')
 
-    train_c, train_loss, val_c, val_loss = [], [], [], []
     for epoch in range(args.max_epochs):
         if args.task_type == 'survival':
             if args.mode == 'coattn':
@@ -199,10 +198,6 @@ def train(datasets: tuple, cur: int, args: Namespace):
             else:
                 t_c, t_l = train_loop_survival(epoch, model, train_loader, optimizer, args.n_classes, writer, loss_fn, reg_fn, args.lambda_reg, args.gc)
                 stop, v_c, v_l = validate_survival(cur, epoch, model, val_loader, args.n_classes, early_stopping, monitor_cindex, writer, loss_fn, reg_fn, args.lambda_reg, args.results_dir, args.gene_samples)
-                train_c.append(t_c)
-                train_loss.append(t_l)
-                val_c.append(v_c)
-                val_loss.append(v_l)
 
     torch.save(model.state_dict(), os.path.join(args.results_dir, "s_{}_checkpoint.pt".format(cur)))
     model.load_state_dict(torch.load(os.path.join(args.results_dir, "s_{}_checkpoint.pt".format(cur))))
