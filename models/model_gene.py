@@ -8,10 +8,6 @@ import os
 from os.path import join
 from collections import OrderedDict
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
 from models.model_utils import *
 import sys
 sys.path.append('../multimodal-histo-gene/pytorch-pretrained-BERT-master')
@@ -44,7 +40,7 @@ def load_ckpt(ckpt_path: str, model: BertModel):
     return model
     
 class GENE_FC(nn.Module):
-    def __init__(self, freeze_BERT, pretrain_BERT, mode, dropout=0.25, n_classes=4):
+    def __init__(self, freeze_BERT=False, pretrain_BERT=False, mode='mutation', dropout=0.25, n_classes=4):
         super(GENE_FC, self).__init__()
         config_dir = '../multimodal-histo-gene/pytorch-pretrained-BERT-master/configs'
         

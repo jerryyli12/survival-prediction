@@ -53,6 +53,15 @@ def collate_MIL_survival(batch):
     c = torch.FloatTensor([item[4] for item in batch])
     return [img, omic, label, event_time, c]
 
+def collate_mm(batch):
+    wsi = torch.cat([item[0] for item in batch], dim = 0)
+    mut = torch.cat([item[1] for item in batch], dim = 0)
+    rna = torch.cat([item[2] for item in batch], dim = 0)
+    label = torch.LongTensor([item[3] for item in batch])
+    event_time = np.array([item[4] for item in batch])
+    c = torch.FloatTensor([item[5] for item in batch])
+    return [wsi, mut, rna, label, event_time, c]
+
 def collate_MIL_survival_cluster(batch):
     img = torch.cat([item[0] for item in batch], dim = 0)
     cluster_ids = torch.cat([item[1] for item in batch], dim = 0).type(torch.LongTensor)
@@ -89,6 +98,8 @@ def get_split_loader(split_dataset, training = False, testing = False, weighted 
         collate = collate_MIL_survival_sig
     elif mode == 'cluster':
         collate = collate_MIL_survival_cluster
+    elif mode == 'multimodal':
+        collate = collate_mm
     else:
         collate = collate_MIL_survival
 
@@ -394,7 +405,12 @@ def get_custom_exp_code(args):
             param_code += '_freeze'
         if args.pretrain_BERT:
             param_code += '_pretrain'
-        
+    elif args.model_type == 'mm_simple':
+        param_code += 'mm_simple'
+    elif args.model_type == 'mm_linear':
+        param_code += 'mm_linear'
+        if args.pretrain_BERT:
+            param_code += '_pretrain'
     else:
         raise NotImplementedError
 

@@ -6,10 +6,6 @@ import numpy as np
 from os.path import join
 from collections import OrderedDict
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
 from models.model_utils import *
 
 import sys

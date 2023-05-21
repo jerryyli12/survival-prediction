@@ -438,6 +438,57 @@ class Generic_MIL_Survival_Dataset(Generic_WSI_Survival_Dataset):
                         path_features.append(torch.zeros((1, 192)))
                 path_features = torch.cat(path_features, dim=0)
                 return path_features.unsqueeze(dim=0), torch.zeros((1,1)), label, event_time, c
+            elif self.mode == 'multimodal':
+                path_features = []
+                for slide_id in slide_ids:
+                    full_path = os.path.join(data_dir, '{}.pt'.format(slide_id.replace(".svs","")))
+                    try:
+                        path_features.append(torch.load(full_path))
+                    except:
+                        print("yikes")
+                        path_features.append(torch.zeros((1, 192)))
+                path_features = torch.cat(path_features, dim=0)
+                wsi_out = path_features.unsqueeze(dim=0)
+                
+                df_item_og = self.mut_df[self.mut_df['patient_ids'] == case_id]
+                all_samples = []
+                for i in range(self.gene_samples):
+                    df_item = df_item_og.copy()
+                    if self.mutation_sampling_nb < df_item.shape[0]:
+                        # check nb of mutation (i.e. not nan = 1) for this patient
+                        n_mut = int(np.sum(df_item['mutation_ids'] > 1))
+                        if n_mut < self.min_mutation_nb:
+                            # select all mutations not nan
+                            mut_rows = df_item[df_item['mutation_ids'] > 1]
+                        else:
+                            # random nb of mut btw min_mutation_nb and min(mutation_sampling_nb and n_mut)
+                            n_mut = random.randint(self.min_mutation_nb, min(self.mutation_sampling_nb, n_mut))
+                            mut_rows = df_item[df_item['mutation_ids'] > 1].sample(n=n_mut)
+                        # rest of non nan mut
+                        n_mut_nan = self.mutation_sampling_nb - n_mut
+                        non_mut_rows = df_item[df_item['mutation_ids'] == 1].sample(n=n_mut_nan)
+                        if n_mut > 0:
+                            df_item = pd.concat([mut_rows, non_mut_rows])
+                        else:
+                            df_item = non_mut_rows
+                    # return tuple of longtensors (gene_inds, mutation_inds) with CLS at the beginning
+                    tokens = torch.LongTensor(df_item[['gene_ids', 'mutation_ids']].values)
+                    all_samples.append(torch.cat((torch.LongTensor([0, 0]).unsqueeze(dim=0), tokens), dim=0))
+                mut_out = torch.stack(all_samples)
+                
+                df_item_og = self.rna_df[self.rna_df['patient_ids'] == case_id]
+                all_samples = []
+                for i in range(self.gene_samples):
+                    df_item = df_item_og.copy()
+                    if self.sampling_nb < df_item.shape[0]:
+                        df_item = df_item[df_item['rnaseq_bin'] > 0].sample(n=self.sampling_nb, )
+                    # return tuple of longtensors (gene_inds, mutation_inds) with CLS at the beginning
+                    tokens = torch.LongTensor(df_item[['gene_ids', 'rnaseq_bin']].values)
+                    all_samples.append(torch.cat((torch.LongTensor([0, 0]).unsqueeze(dim=0), tokens), dim=0))
+                rna_out = torch.stack(all_samples)
+                
+                return wsi_out, mut_out, rna_out, label, event_time, c
+                
         else:
             return None
 

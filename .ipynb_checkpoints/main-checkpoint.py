@@ -70,6 +70,7 @@ def main(args):
 
 	### Finish 5-Fold CV Evaluation.
 	if args.task_type == 'survival':
+		print(latest_val_cindex)
 		results_latest_df = pd.DataFrame({'folds': folds, 'val_cindex': latest_val_cindex})
 
 	if len(folds) != args.k:
@@ -120,7 +121,7 @@ parser.add_argument('--early_stopping',  action='store_true', default=False, hel
 
 #### from hipt
 parser.add_argument('--model_type',     type=str, default='clam_sb', help='Type of model to use',
-                    choices=['clam_sb', 'clam_mb', 'mil', 'dgcn', 'mi_fcn', 'dsmil', 'hipt_n', 'hipt_lgp', 'gene'])
+                    choices=['clam_sb', 'clam_mb', 'mil', 'dgcn', 'mi_fcn', 'dsmil', 'hipt_n', 'hipt_lgp', 'gene', 'mm_simple', 'mm_linear'])
 parser.add_argument('--features',       type=str, default='vits_tcga_pancancer_dino', help='Which features to use', choices=['resnet50_trunc', 'vits_tcga_pancancer_dino'])
 parser.add_argument('--path_input_dim', type=int, default=384, help='Size of patch embedding size (384 for DINO)')
 parser.add_argument('--pretrain_4k',    type=str, default='vit4k_xs_dino', help='Whether to initialize the 4K Transformer in HIPT', choices=['None', 'vit4k_xs_dino'])
@@ -132,11 +133,17 @@ parser.add_argument('--gene_samples', type=int, default=1, help='Number of sampl
 parser.add_argument('--freeze_BERT',    action='store_true', default=False, help='Whether to freeze the BERT Mutation model')
 parser.add_argument('--pretrain_BERT',  action='store_true', default=False, help='Whether to use pretrained BERT Mutation model')
 
+parser.add_argument('--agg',     type=str, default='mean', help='Type of agg',
+                    choices=['mean'])
+
 args = parser.parse_args()
 device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 if 'hipt' in args.model_type:
     args.mode = 'pyramid'
+    
+if 'mm' in args.model_type:
+    args.mode = 'multimodal'
 
 ### Creates Experiment Code from argparse + Folder Name to Save Results
 args = get_custom_exp_code(args)
@@ -184,7 +191,7 @@ print('\nLoad Dataset')
 print(args.task)
 
 study = "_".join(args.task.split('_')[:2])
-if args.mode == 'pyramid':
+if args.mode == 'pyramid' or args.mode == 'multimodal':
     study_dir = '{}/extracted_mag20x_patch4096_fp/{}_pt_patch_features_384'.format(study, args.features)
 else:
     study_dir = '{}/extracted_mag20x_patch256_fp/{}_pt_patch_features'.format(study, args.features)
